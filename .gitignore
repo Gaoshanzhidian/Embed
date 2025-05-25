@@ -1,0 +1,8 @@
+ProgramConfig.json
+obj
+out
+cmake.exe
+ninja.exe
+gitkey.txt
+gitkey.txt.pub
+embed.sln
