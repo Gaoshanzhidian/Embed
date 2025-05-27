@@ -13,6 +13,7 @@ using System.Runtime.InteropServices;
 using System.IO.Pipes;
 using System.Text;
 using System.Diagnostics.SymbolStore;
+using System.Text.Json.Serialization.Metadata;
 
 //枚举
 enum Error
@@ -50,6 +51,8 @@ readonly record struct Command(string Name)
     public static readonly Command Set = new("set");
     public static readonly Command Download = new("download");
     public static readonly Command Load = new("load");
+    public static readonly Command Pos = new("pos");
+    public static readonly Command Position = new("position");
     public override string ToString() => Name;
 }
 
@@ -68,7 +71,7 @@ readonly record struct CommandAction(CA Function)
                 Hal = args[2],
                 ProjectPath = args[3],
                 EditorPath = args[4],
-                CompilerPath=args[5],
+                CompilerPath = args[5],
             };
 
         }
@@ -83,16 +86,9 @@ readonly record struct CommandAction(CA Function)
             string proj = Utils.PromptUntilValid("项目创建路径");
             string vs = Utils.PromptUntilValid("Vscode路径");
             string com = Utils.PromptUntilValid("编译器路径");
-            config = new ProgramConfig { Std = std, Hal = hal, ProjectPath = proj, EditorPath = vs ,CompilerPath=com};
+            config = new ProgramConfig { Std = std, Hal = hal, ProjectPath = proj, EditorPath = vs, CompilerPath = com };
         }
         Program.ProgramConfigManager.Write(config);
-        if (!Directory.Exists(FILE_NAME.StFlash_Config_Chiips))
-        {
-            // var code=Utils.RunAsAdministrator();
-            // if (code == Error.No_Administor_Privilege) return code;
-            var info = Directory.CreateSymbolicLink(FILE_NAME.StFlash_Config_Chiips, Path.Combine(Program.ExePath, "stlink\\Program Files (x86)\\stlink"));
-            Utils.Prompt(info.Exists.ToString());
-        }
 
         Utils.Prompt(@$"配置完成：
 标准外设库路径：{config.Std}
@@ -113,6 +109,7 @@ Vscode路径{config.EditorPath}
         string project_path = config.ProjectPath;
         string real_path = Path.Combine(project_path, project_name);
         string vscodeFolder = Path.Combine(real_path, FILE_NAME.ProjectPluginConfigDir);
+        Console.WriteLine("vscodeFolder:" + vscodeFolder);
         Directory.CreateDirectory(real_path);
         foreach (string src in config.SourceDirs)
         {
@@ -149,7 +146,7 @@ Vscode路径{config.EditorPath}
         config.IncludeDirs.Add(project_std_inc);
         foreach (string dir in FileOrDirectoryList.StdIncDirs)
         {
-            config.IncludeDirs.Add(Path.Combine(std_path,dir));
+            config.IncludeDirs.Add(Path.Combine(std_path, dir));
         }
         foreach (string file in FileOrDirectoryList.StdSrcFiles)
         {
@@ -159,23 +156,23 @@ Vscode路径{config.EditorPath}
         config.SourceDirs.Add(project_std_src);
         foreach (string dir in FileOrDirectoryList.StdSrcDirs)
         {
-            Directory.CreateSymbolicLink(Path.Combine(project_std_src,Path.GetFileName(dir)), Path.Combine(std_path, dir));
+            Directory.CreateSymbolicLink(Path.Combine(project_std_src, Path.GetFileName(dir)), Path.Combine(std_path, dir));
             config.SourceDirs.Add(Path.Combine(std_path, dir));
-            Console.WriteLine($"创建符号链接{Path.Combine(project_std_src,Path.GetFileName(dir))}==>{Path.Combine(std_path, dir)}");
+            Console.WriteLine($"创建符号链接{Path.Combine(project_std_src, Path.GetFileName(dir))}==>{Path.Combine(std_path, dir)}");
 
         }
         foreach (string file in FileOrDirectoryList.StdAsmFiles)
         {
-            File.CreateSymbolicLink(Path.Combine(project_std_asm,Path.GetFileName(file)), Path.Combine(std_path, file));
-            Console.WriteLine($"创建符号链接{Path.Combine(project_std_asm,Path.GetFileName(file))}==>{Path.Combine(std_path, file)}");
+            File.CreateSymbolicLink(Path.Combine(project_std_asm, Path.GetFileName(file)), Path.Combine(std_path, file));
+            Console.WriteLine($"创建符号链接{Path.Combine(project_std_asm, Path.GetFileName(file))}==>{Path.Combine(std_path, file)}");
 
         }
         config.AssembleDirs.Add(project_std_asm);
         foreach (string dir in FileOrDirectoryList.StdAsmDirs)
         {
-            Directory.CreateSymbolicLink(Path.Combine(project_std_asm,Path.GetFileName(dir)), Path.Combine(std_path, dir));
+            Directory.CreateSymbolicLink(Path.Combine(project_std_asm, Path.GetFileName(dir)), Path.Combine(std_path, dir));
             config.AssembleDirs.Add(Path.Combine(std_path, dir));
-            Console.WriteLine($"创建符号链接{Path.Combine(project_std_asm,Path.GetFileName(dir))}==>{Path.Combine(std_path, dir)}");
+            Console.WriteLine($"创建符号链接{Path.Combine(project_std_asm, Path.GetFileName(dir))}==>{Path.Combine(std_path, dir)}");
         }
         // 附加std宏定义
         config.Define.AddRange(MacroDifineList.StdDefines);
@@ -185,7 +182,7 @@ Vscode路径{config.EditorPath}
             config.IncludeDirs.Add(Path.Combine(Program.ProgramConfig.CompilerPath, dir));
         }
         // 写入项目配置
-        Program.ProjectConfigManager.Write(config,Path.Combine(vscodeFolder, FILE_NAME.ProjectConfigFileName));
+        Program.ProjectConfigManager.Write(config, Path.Combine(vscodeFolder, FILE_NAME.ProjectConfigFileName));
         string json = Utils.GeneratePropertiesJson(config);
         File.WriteAllText(Path.Combine(vscodeFolder, FILE_NAME.ProjectPluginConfigFileName), json);
         // File.WriteAllText(Path.Combine(vscodeFolder, FILE_NAME.ProjectConfigFileName), Program.ProjectConfigManager.TransformConfigToJson(config));
@@ -211,12 +208,13 @@ Vscode路径{config.EditorPath}
         Utils.Prompt(
 @"这是一个简单的嵌入式工程模板生成器。
 基于stm32芯片。
-你可以使用以下命令。
-在命令行单指令模式下，
+你可以使用以下命令。（均省略了embed）
 help 获取帮助，打印本段话。
-config 配置标准外设库与硬件抽象层库的路径。第一个参数被识别为标准外设库路径，第二个参数被识别为硬件抽象层库路径。
-default 使用默认的库。
-……
+config 进行程序运行环境的配置
+std 构建依赖标准外设库的项目
+build 编译源代码
+load 烧录二进制文件
+clear project 清理项目
 ");
         return Error.Correct;
     });
@@ -232,20 +230,20 @@ default 使用默认的库。
         var cmakelist_path = Path.Combine(proj_path, FILE_NAME.CMakeList);
         var cmake_toolchain = Utils.GenerateCMakeToolchainText();
         var cmake_toolchain_path = Path.Combine(proj_path, FILE_NAME.CMakeToolchain);
-        var linkscript_path = Path.Combine(proj_path,FILE_NAME.LinkScript);
+        var linkscript_path = Path.Combine(proj_path, FILE_NAME.LinkScript);
         File.WriteAllText(cmakelist_path, cmakelist);
-        File.WriteAllText(cmake_toolchain_path,cmake_toolchain);
-        File.WriteAllText(linkscript_path,linkscript);
+        File.WriteAllText(cmake_toolchain_path, cmake_toolchain);
+        File.WriteAllText(linkscript_path, linkscript);
         var psi_cmake = new ProcessStartInfo
         {
             FileName = Path.Combine(Program.ExeDir, FILE_NAME.CMakePath),
-            Arguments = $"-S {proj_path} -B {Path.Combine(proj_path, config.IntermediateOutput)} -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE={Path.Combine(proj_path,FILE_NAME.CMakeToolchain)}",
+            Arguments = $"-S {proj_path} -B {Path.Combine(proj_path, config.IntermediateOutput)} -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE={Path.Combine(proj_path, FILE_NAME.CMakeToolchain)}",
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        var cmake_process=Process.Start(psi_cmake)!;
+        var cmake_process = Process.Start(psi_cmake)!;
         Utils.CaptureErrorOrOutput(cmake_process);
         cmake_process.WaitForExit();
         if (cmake_process.ExitCode != 0) return Error.Cmake_Failed;
@@ -259,7 +257,7 @@ default 使用默认的库。
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        var ninja_process=Process.Start(psi_ninja)!;
+        var ninja_process = Process.Start(psi_ninja)!;
         Utils.CaptureErrorOrOutput(ninja_process);
         ninja_process.WaitForExit();
         if (ninja_process.ExitCode != 0)
@@ -267,6 +265,9 @@ default 使用默认的库。
             return Error.Ninja_Failed;
         }
         ninja_process.Close();
+        File.Move(Path.Combine(proj_path, config.IntermediateOutput, config.ProjectName + ".bin"), Path.Combine(proj_path, config.FinalOutput, config.ProjectName + ".bin"));
+        File.Move(Path.Combine(proj_path, config.IntermediateOutput, config.ProjectName + ".elf"), Path.Combine(proj_path, config.FinalOutput, config.ProjectName + ".elf"));
+        File.Move(Path.Combine(proj_path, config.IntermediateOutput, config.ProjectName + ".hex"), Path.Combine(proj_path, config.FinalOutput, config.ProjectName + ".hex"));
         return Error.Correct;
     });
     public static readonly CommandAction Download = new(delegate (string[] args)
@@ -278,7 +279,7 @@ default 使用默认的库。
         var psi = new ProcessStartInfo
         {
             FileName = Path.Combine(Program.ExeDir, FILE_NAME.StFlashPath),
-            Arguments = $"write {Path.Combine(proj_path,config.IntermediateOutput,config.ProjectName+".bin")} 0x08000000",
+            Arguments = $"write {Path.Combine(proj_path, config.FinalOutput, config.ProjectName + ".bin")} 0x08000000",
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
@@ -286,7 +287,7 @@ default 使用默认的库。
 
         };
         // psi.Environment["STLINK_CHIPDB_PATH"] = Path.Combine(Program.ExeDir,"stlink","chips");
-        var process=Process.Start(psi)!;
+        var process = Process.Start(psi)!;
         Utils.CaptureErrorOrOutput(process);
         process.WaitForExit();
         return Error.Correct;
@@ -432,6 +433,13 @@ default 使用默认的库。
         }
         return Error.Few_Argument;
     });
+
+    public static readonly CommandAction Pos = new(delegate (string[] args)
+    {
+        Utils.Prompt(Program.ExePath);
+        return Error.Correct;
+    });
+    public static readonly CommandAction Position = Pos;
 }
 
 //字符串常量
@@ -554,9 +562,8 @@ class ConfigManager<T>(string path)
         string json = JsonSerializer.Serialize(config, Program.JsonOptions);
         File.WriteAllText(path, json);
     }
-    public string TransformConfigToJson(T config, bool indentedOption = true, string? path = null)
+    public string TransformConfigToJson(T config)
     {
-        path ??= this.path;
         return JsonSerializer.Serialize(config, Program.JsonOptions);
     }
 
@@ -565,7 +572,7 @@ class ConfigManager<T>(string path)
         path ??= this.path;
         if (!File.Exists(path)) return Activator.CreateInstance<T>();
         string json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<T>(json)!;
+        return JsonSerializer.Deserialize<T>(json,Program.JsonOptions)!;
     }
 
     public string ReadString(string? path = null)
@@ -655,39 +662,37 @@ class Utils
         string proj_name = "";
         List<string> incDir = [];
         List<string> srcDir = [];
-        List<string> assDir = [];
+        List<string> asmDir = [];
         string output = "";
         string outbin = "";
         List<string> define = [];
-
         if (args.Length == 3)
         {
             proj_name = args[1];
-            proj_path = Path.Combine(args[2], proj_name);
+            proj_path = args[2];
         }
         else if (args.Length == 2)
         {
             proj_name = args[1];
-            proj_path = Path.Combine(proj_path, proj_name);
         }
         else if (args.Length == 1)
         {
             proj_name = PromptUntilValid("项目名称", 1);
             proj_path = PromptUntilValid("项目路径", 1);
-            incDir = [.. PromptUntilValid("头文件路径", 1).Split()];
-            srcDir = [.. PromptUntilValid("源文件路径", 1).Split()];
-            assDir = [.. PromptUntilValid("汇编文件路径", 1).Split()];
+            incDir = [.. PromptUntilValid("头文件路径", 1).Trim().Split(' ',StringSplitOptions.RemoveEmptyEntries)];
+            srcDir = [.. PromptUntilValid("源文件路径", 1).Trim().Split(' ',StringSplitOptions.RemoveEmptyEntries)];
+            asmDir = [.. PromptUntilValid("汇编文件路径", 1).Trim().Split(' ',StringSplitOptions.RemoveEmptyEntries)];
             output = PromptUntilValid("编译中间结果输出路径", 1);
             outbin = PromptUntilValid("编译最终结果输出路径", 1);
-            define = [.. PromptUntilValid("宏定义值", 1).Split()];
+            define = [.. PromptUntilValid("宏定义值", 1).Trim().Split(' ',StringSplitOptions.RemoveEmptyEntries)];
         }
         var config = ProjectConfig.Default();
         config.ProjectName = !String.IsNullOrWhiteSpace(proj_name) ? proj_name : config.ProjectName;
         config.ProjectPath = !String.IsNullOrWhiteSpace(proj_path) ? proj_path : config.ProjectPath;
-        config.IncludeDirs = !String.IsNullOrWhiteSpace(incDir[0]) ? incDir : config.IncludeDirs;
-        config.SourceDirs = !String.IsNullOrWhiteSpace(srcDir[0]) ? srcDir : config.SourceDirs;
-        config.AssembleDirs = !String.IsNullOrWhiteSpace(assDir[0]) ? assDir : config.AssembleDirs;
-        config.Define = !String.IsNullOrWhiteSpace(define[0]) ? define : config.Define;
+        config.IncludeDirs = incDir.Count!=0? incDir : config.IncludeDirs;
+        config.SourceDirs = srcDir.Count!=0 ? srcDir : config.SourceDirs;
+        config.AssembleDirs = asmDir.Count!=0 ? asmDir : config.AssembleDirs;
+        config.Define = define.Count!=0 ? define : config.Define;
         config.IntermediateOutput = !String.IsNullOrWhiteSpace(output) ? output : config.IntermediateOutput;
         config.FinalOutput = !String.IsNullOrWhiteSpace(outbin) ? outbin : config.FinalOutput;
         return config;
@@ -847,7 +852,7 @@ class Utils
         sb.AppendLine("enable_language(ASM)");
         sb.AppendLine();
 
-        sb.AppendLine("set(CMAKE_SYSTEM_NAME Gneric)");
+        sb.AppendLine("set(CMAKE_SYSTEM_NAME Generic)");
         sb.AppendLine("set(CMAKE_SYSTEM_PROCESSOR ARM)");
         sb.AppendLine();
 
@@ -908,10 +913,10 @@ class Utils
         sb.AppendLine("add_link_options(-T${LINKER_SCRIPT})");
 
         sb.AppendLine("add_executable(${PROJECT_NAME}.elf ${SOURCES})");
-        sb.AppendLine(@"set(CMAKE_OBJCOPY arm-none-eabi-objcopy)
-    add_custom_command(TARGET ${PROJECT_NAME}.elf POST_BUILD
-    COMMAND ${CMAKE_OBJCOPY} -O ihex ${PROJECT_NAME}.elf ${PROJECT_NAME}.hex
-    COMMAND ${CMAKE_OBJCOPY} -O binary ${PROJECT_NAME}.elf ${PROJECT_NAME}.bin
+        sb.AppendLine(@$"set(CMAKE_OBJCOPY {Path.Combine(Program.ProgramConfig.CompilerPath,"bin","arm-none-eabi-objcopy").Replace("\\","/")})
+    add_custom_command(TARGET ${{PROJECT_NAME}}.elf POST_BUILD
+    COMMAND ${{CMAKE_OBJCOPY}} -O ihex ${{PROJECT_NAME}}.elf ${{PROJECT_NAME}}.hex
+    COMMAND ${{CMAKE_OBJCOPY}} -O binary ${{PROJECT_NAME}}.elf ${{PROJECT_NAME}}.bin
     COMMENT ""Generating HEX and BIN files"")
 ");
         return sb.ToString();
@@ -928,9 +933,7 @@ set(CMAKE_C_COMPILER ""{Path.Combine(Program.ProgramConfig.CompilerPath, FILE_NA
 
 # 不要尝试运行可执行程序
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
-
-# 可选：设置链接器、汇编器、工具链前缀等
-#set(CMAKE_ASM_COMPILER arm-none-eabi-as)";
+";
     }
 
     public static string GenerateLinkScript()
@@ -1152,15 +1155,23 @@ class CommandHandler(CommandAction func)
     }
 }
 
+// [JsonSourceGenerationOptions(WriteIndented = true)]
+// [JsonSerializable(typeof(ProjectConfig))]
+// [JsonSerializable(typeof(ProgramConfig))]
+// partial class ConfigJsonContext : JsonSerializerContext {
+// }
+
+
+
 partial class Program
 {
     public static readonly string ExePath = Assembly.GetEntryAssembly()?.Location ?? throw new Exception(Error.Path_Not_Exists.ToString());
     public static readonly string ExeDir = Path.GetDirectoryName(ExePath) ?? throw new Exception(Error.Path_Not_Exists.ToString());
     public static readonly string CurrentDirectory = Directory.GetCurrentDirectory();
     public static readonly ConfigManager<ProgramConfig> ProgramConfigManager = new(Path.Combine(ExeDir, FILE_NAME.ProgramConfigFileName));
-    public static readonly ConfigManager<ProjectConfig> ProjectConfigManager = new (Path.Combine(CurrentDirectory, FILE_NAME.ProjectConfigFileName));
+    public static readonly ConfigManager<ProjectConfig> ProjectConfigManager = new(Path.Combine(CurrentDirectory, FILE_NAME.ProjectConfigFileName));
     public static readonly ProgramConfig ProgramConfig = ProgramConfigManager.Read();
-    public static readonly JsonSerializerOptions JsonOptions = new () { WriteIndented = true };
+    public static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented=true};//TypeInfoResolver=ConfigJsonContext.Default};
     static readonly Dictionary<Command, CommandHandler> commands = new()
     {
         [Command.Config] = new CommandHandler(CommandAction.Config),
@@ -1175,7 +1186,7 @@ partial class Program
         [Command.Set] = new CommandHandler(CommandAction.Set),
         [Command.Clear] = new CommandHandler(CommandAction.Clear),
         [Command.Load] = new CommandHandler(CommandAction.Load),
-        [Command.Download]=new CommandHandler(CommandAction.Download)
+        [Command.Download] = new CommandHandler(CommandAction.Download)
         // 其他命令类同样添加到此处
     };
 
